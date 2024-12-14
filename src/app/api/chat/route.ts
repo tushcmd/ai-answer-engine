@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { scrapeWebsites, validateUrls } from "@/utils/scraper";
 import { generateResponseWithSources } from "@/utils/groqClient";
 import { checkRateLimit, CacheManager } from "@/utils/rateLimit";
+import { Message } from "@/types";
 
 export async function POST(req: Request) {
   try {
@@ -21,7 +22,15 @@ export async function POST(req: Request) {
     }
 
     // Parse request body
-    const { message, urls } = await req.json();
+    const {
+      message,
+      urls,
+      conversationHistory,
+    }: {
+      message: string;
+      urls?: string[];
+      conversationHistory: Message[];
+    } = await req.json();
 
     // Validate input
     if (!message) {
@@ -31,11 +40,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check cache first
-    const cachedResponse = await CacheManager.getCachedResponse({
+    // Create cache key that includes conversation history
+    const cacheInput = {
       message,
       urls,
-    });
+      conversationHistoryLength: conversationHistory.length,
+    };
+
+    // Check cache first
+    const cachedResponse = await CacheManager.getCachedResponse(cacheInput);
     if (cachedResponse) {
       return NextResponse.json(cachedResponse);
     }
@@ -47,15 +60,16 @@ export async function POST(req: Request) {
     const scrapedContents =
       validUrls.length > 0 ? await scrapeWebsites(validUrls) : [];
 
-    // Generate response with sources
+    // Generate response with sources and conversation context
     const response = await generateResponseWithSources(
       message,
-      scrapedContents
+      scrapedContents,
+      conversationHistory
     );
 
     // Cache the response
     await CacheManager.cacheResponse(
-      { message, urls },
+      cacheInput,
       response,
       3600 // 1 hour cache
     );

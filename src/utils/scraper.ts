@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import cheerio from "cheerio";
+import * as cheerio from "cheerio";
 
 export interface ScrapedContent {
   url: string;

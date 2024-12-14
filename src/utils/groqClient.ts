@@ -1,4 +1,5 @@
 import Groq from "groq-sdk";
+import { Message } from "@/types";
 
 // Ensure environment variable is set
 if (!process.env.GROQ_API_KEY) {
@@ -10,13 +11,21 @@ export const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// Helper function to generate response with sources
+// Helper function to generate response with sources and conversation context
 export async function generateResponseWithSources(
   prompt: string,
-  sources: { url: string; content: string }[]
+  sources: { url: string; content: string }[],
+  conversationHistory: Message[] = []
 ) {
   try {
-    // Construct a prompt that includes source context
+    // Construct conversation history context
+    const historicalContext = conversationHistory
+      .map(
+        msg => `${msg.role === "user" ? "Human" : "Assistant"}: ${msg.content}`
+      )
+      .join("\n");
+
+    // Construct source context
     const sourceContext = sources
       .map(
         (source, index) =>
@@ -25,16 +34,20 @@ export async function generateResponseWithSources(
       .join("\n\n");
 
     const fullPrompt = `
+Conversation History:
+${historicalContext}
+
 Context from web sources:
 ${sourceContext}
 
 User Question: ${prompt}
 
-Please provide a comprehensive answer to the question, using the context from the sources. 
-Ensure to:
-1. Answer the question directly
-2. Cite the specific sources used for each part of the answer
-3. Format the response with clear source attributions
+Please provide a comprehensive answer to the question, taking into account:
+1. The conversation history
+2. The context from web sources
+3. Answer the question directly
+4. Cite the specific sources used for each part of the answer
+5. Maintain coherence with the previous conversation
 `;
 
     const chatCompletion = await groq.chat.completions.create({
@@ -58,18 +71,3 @@ Ensure to:
     throw error;
   }
 }
-
-// import Groq from 'groq-sdk';
-
-// const client = new Groq({});
-
-// async function getGroqResponse(message: string) {
-//     try {
-//         const response = await client.request(message);
-//         return response;
-//     } catch (error) {
-//         console.error(error);
-//     }
-// }
-
-// export default getGroqResponse
