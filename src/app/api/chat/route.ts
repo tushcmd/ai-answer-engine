@@ -1,20 +1,7 @@
-// TODO: Implement the chat API with Groq and web scraping with Cheerio and Puppeteer
-// Refer to the Next.js Docs on how to read the Request body: https://nextjs.org/docs/app/building-your-application/routing/route-handlers
-// Refer to the Groq SDK here on how to use an LLM: https://www.npmjs.com/package/groq-sdk
-// Refer to the Cheerio docs here on how to parse HTML: https://cheerio.js.org/docs/basics/loading
-// Refer to Puppeteer docs here: https://pptr.dev/guides/what-is-puppeteer
-
-// export async function POST(req: Request) {
-//   try {
-
-//   } catch (error) {
-
-//   }
-// }
 import { NextResponse } from "next/server";
 import { scrapeWebsites, validateUrls } from "@/utils/scraper";
 import { generateResponseWithSources } from "@/utils/groqClient";
-import { checkRateLimit } from "@/utils/rateLimit";
+import { checkRateLimit, CacheManager } from "@/utils/rateLimit";
 
 export async function POST(req: Request) {
   try {
@@ -44,6 +31,15 @@ export async function POST(req: Request) {
       );
     }
 
+    // Check cache first
+    const cachedResponse = await CacheManager.getCachedResponse({
+      message,
+      urls,
+    });
+    if (cachedResponse) {
+      return NextResponse.json(cachedResponse);
+    }
+
     // Process URLs if provided
     const validUrls = urls ? validateUrls(urls) : [];
 
@@ -55,6 +51,13 @@ export async function POST(req: Request) {
     const response = await generateResponseWithSources(
       message,
       scrapedContents
+    );
+
+    // Cache the response
+    await CacheManager.cacheResponse(
+      { message, urls },
+      response,
+      3600 // 1 hour cache
     );
 
     return NextResponse.json(response);
